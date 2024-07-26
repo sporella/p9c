@@ -1,0 +1,179 @@
+---
+title: "Exploring plotnine features with geospatial data"
+format:
+  html:
+    code-fold: true
+jupyter: python3
+theme: flatly
+toc: true
+---
+
+# Context
+
+For this [Plotnine Contest](https://posit.co/blog/announcing-the-2024-plotnine-contest/) I wanted to explore the features of plotnine for geospatial data visualization. I also wanted to prove if I can replicate my usual `ggplot2` workflow and if my common used features are available in plotnine.
+
+So I have a checklist:
+
+-   [ ] Plot geospatial vector data
+-   [ ] Change color palette
+-   [ ] Use map projections
+-   [ ] Theme
+-   [ ] Combine plots
+
+# Load data
+
+The example data is about world languages and was obtained [here](https://resourcewatch.org/data/explore/soc_071_world_languages?section=Discover&selectedCollection=&zoom=0.41679752760606004&lat=0&lng=62.138351743763984&pitch=0&bearing=0&basemap=dark&labels=light&layers=%255B%257B%2522dataset%2522%253A%252220662342-dcdd-4a42-9f58-bcc80217de71%2522%252C%2522opacity%2522%253A1%252C%2522layer%2522%253A%2522f2d76e6b-060d-4dc9-83ea-284bef6b2aae%2522%257D%255D&aoi=&page=1&sort=most-viewed&sortDirection=-1)
+
+To load geoespatial data you can use the [{geopandas}](https://geopandas.org/en/stable/) library:
+
+-   With `read_file()` you can load the shapefile format.
+
+-   Here I convert the data to a cartesian projection because plotnine doesn't support map projections yet.
+
+-   I also compute the first 10 most used languages based in the number of features with the language as First Official Languaje. It's not too exhaustive, a better approach would be based on population, but here I decided to keep it simple.
+
+```{python}
+#| echo: true
+#| warning: false
+#| message: false
+
+import geopandas as gpd
+import numpy as np
+
+data = gpd.read_file("data/soc_071_world_languages/World_Languages.shp")
+
+data = data.to_crs(3857)
+top10 = data.groupby(['FIRST_OFFI'])['FIRST_OFFI'].count().nlargest(10)
+
+data["top"] = np.where(data['FIRST_OFFI'].isin(top10.index), data['FIRST_OFFI'], "*Other")
+
+```
+
+# Visualization
+
+## Map
+
+My first aim was to obtain a map colored by language. This can be made easily with `geom_map()` and it looks pretty similar to ggplot in R!
+
+```{python}
+# | echo: true
+
+from plotnine import *
+
+(ggplot() + geom_map(data, aes(fill="top"))).draw();
+```
+
+Now I changed the color palette and added some styling. The syntax is almost the same than in R, I noticed two small differences:
+
+-   **transparent color:** in R you can use "transparent" to not show the polygons borders, in Python you have to use the HEX code with 100% transparency.
+
+-   **dots are underscores:** the arguments that in R have a dot, in Python are replaced with an underscore.
+
+```{python}
+# | echo: true
+
+colors = [
+    "#A5AA99",
+    "#E58606",
+    "#5D69B1",
+    "#52BCA3",
+    "#99C945",
+    "#CC61B0",
+    "#24796C",
+    "#DAA51B",
+    "#2F8AC4",
+    "#764E9F",
+    "#ED645A",
+]
+
+p1 = (
+    ggplot()
+    + geom_map(data, aes(fill="top"), color="#FF000000")
+    + scale_fill_manual(values=colors)
+    + coord_cartesian()
+    + labs(fill="", title="Top 10 World Languages")
+    + theme_void()
+    + theme(
+        legend_position="bottom", 
+        plot_title=element_text(family="fantasy", size=30)
+    )
+)
+p1.draw();
+```
+
+## Column plot
+
+I added a column plot to the analysis to include the number of territories that speak each language.
+
+```{python}
+# | echo: true
+
+top10n = data.groupby(["top"])["top"].count().nlargest(10).reset_index(name="count")
+
+
+p2 = (
+    ggplot(top10n, aes(x="reorder(top, count)", y="count", fill="top"))
+    + geom_col(show_legend=False)
+    + geom_text(aes(label="count"), ha="left", nudge_y=0.5)
+    + scale_fill_manual(values=colors)
+    + coord_flip()
+    + theme_void()
+    + labs(title="Number of territories that speak the language")
+    + theme(
+        axis_text_y=element_text(size=15, ha="right"), 
+        plot_title=element_text(size=30, family = "fantasy")
+    )
+)
+p2.draw();
+```
+
+## Combine plots
+
+Combine plots is very useful because you can show quantities that are not easily shown by a map. So I wanted to arrange the two plots in the same figure as you can make it with the `{patchwork}` package in R.
+
+I use [patchworklib](https://github.com/ponnhide/patchworklib) to combine the two plots in a simple layout. I read that patchworklib doesn't have support for plotnine anymore, so you can obtain some unexpected results.
+
+```{python}
+# | echo: true
+
+import patchworklib as pw
+from plotnine import *
+
+g1 = pw.load_ggplot(p1 + theme(legend_position="none"), figsize=(8, 6))
+g2 = pw.load_ggplot(p2, figsize=[4, 4])
+
+p = g1 | g2
+p
+```
+
+# Checklist review
+
+Lets review my check list!
+
+-   [x] Plot geospatial vector data
+
+Easy to plot a geopandas object with `geom_map()`
+
+-   [x] Change color palette
+
+Easy, the same logic than ggplot. A difference is that in R, I use `color = "transparent"`to not show the polygons borders, but in Python you have to use the HTML code "#FF000000" for fully transparent border.
+
+-   [ ] Use map projections
+
+It seems like a feature that has to be developed by the `cartopy` team. Now the maps with geographic coordinates can be distorted, so it is more secure to work with projected coordinates that fits better with cartesian coordinates.
+
+[see this issue](https://github.com/has2k1/plotnine/issues/14)
+
+-   [x] Theme
+
+Almost the same than ggplot, just the arguments have a `_` instead of `.` (because a dot means a lot in Python)
+
+-   [ ] Combine Plots
+
+Not fully functional yet. The `patchworklib` maintainer said that he is unable to continue supporting plotnine, [see here](https://github.com/ponnhide/patchworklib/issues/56#issuecomment-2108044030)
+
+# Final thoughts
+
+I love that now a can make plots in Python knowing what I´m doing! (I have never understood matplotlib completely).
+
+Definetly the plotnine community will increase and, as with ggplot, much more extensions will developed in the future.
