@@ -6,6 +6,9 @@ format:
 jupyter: python3
 theme: flatly
 toc: true
+#| echo: true
+#| warning: false
+#| message: false
 ---
 
 # Context
@@ -33,10 +36,6 @@ To load geoespatial data you can use the [{geopandas}](https://geopandas.org/en/
 -   I also compute the first 10 most used languages based in the number of features with the language as First Official Languaje. It's not too exhaustive, a better approach would be based on population, but here I decided to keep it simple.
 
 ```{python}
-#| echo: true
-#| warning: false
-#| message: false
-
 import geopandas as gpd
 import numpy as np
 
@@ -56,8 +55,6 @@ data["top"] = np.where(data['FIRST_OFFI'].isin(top10.index), data['FIRST_OFFI'],
 My first aim was to obtain a map colored by language. This can be made easily with `geom_map()` and it looks pretty similar to ggplot in R!
 
 ```{python}
-# | echo: true
-
 from plotnine import *
 
 (ggplot() + geom_map(data, aes(fill="top"))).draw();
@@ -70,7 +67,6 @@ Now I changed the color palette and added some styling. The syntax is almost the
 -   **dots are underscores:** the arguments that in R have a dot, in Python are replaced with an underscore.
 
 ```{python}
-# | echo: true
 
 colors = [
     "#A5AA99",
@@ -95,10 +91,12 @@ p1 = (
     + theme_void()
     + theme(
         legend_position="bottom", 
-        plot_title=element_text(family="fantasy", size=30)
+        plot_title=element_text(family="fantasy", size=30),
+        plot_background = element_rect(fill = "white")
     )
 )
 p1.draw();
+ggsave(p1, "plots/map.png")
 ```
 
 ## Column plot
@@ -106,7 +104,6 @@ p1.draw();
 I added a column plot to the analysis to include the number of territories that speak each language.
 
 ```{python}
-# | echo: true
 
 top10n = data.groupby(["top"])["top"].count().nlargest(10).reset_index(name="count")
 
@@ -121,10 +118,12 @@ p2 = (
     + labs(title="Number of territories that speak the language")
     + theme(
         axis_text_y=element_text(size=15, ha="right"), 
-        plot_title=element_text(size=30, family = "fantasy")
+        plot_title=element_text(size=30, family = "fantasy"),
+        plot_background = element_rect(fill = "white")
     )
 )
 p2.draw();
+ggsave(p2, "plots/column.png")
 ```
 
 ## Combine plots
@@ -144,6 +143,7 @@ g2 = pw.load_ggplot(p2, figsize=[4, 4])
 
 p = g1 | g2
 p
+
 ```
 
 # Checklist review
